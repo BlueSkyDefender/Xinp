@@ -28,13 +28,13 @@ static void get_gamepad_state(float out[OUT_COUNT])
 	if (XInputGetState(0, &state) != ERROR_SUCCESS)
 		return; // No controller connected
 
-	// Joysticks
+	// Joysticks - No toggle states for analog sticks, just raw values
 	out[0] = state.Gamepad.sThumbLX / 32767.0f;
 	out[1] = state.Gamepad.sThumbLY / 32767.0f;
 	out[2] = state.Gamepad.sThumbRX / 32767.0f;
 	out[3] = state.Gamepad.sThumbRY / 32767.0f;
 
-	// Triggers - Need to see if I can get it to work with toggle states
+	// Triggers
 	out[4] = state.Gamepad.bLeftTrigger / 255.0f;
 	out[5] = state.Gamepad.bRightTrigger / 255.0f;
 
@@ -62,8 +62,8 @@ static void update_gamepad_states()
 	get_gamepad_state(raw);
 
 	for (int i = 0; i < OUT_COUNT; ++i)
-	{
-		bool currently_pressed = (i >= 6 && raw[i] > 0.5f);
+	{   // Treat triggers (indices 4 and 5) and all buttons (index >= 6) as toggle candidates
+		bool currently_pressed = (i >= 4 && raw[i] > 0.1f);// Threshold to consider a button pressed and Triggers pressed at 10% May need to make this adjustable.
 
 		if (currently_pressed && !previous_pressed[i])
 		{
@@ -71,15 +71,15 @@ static void update_gamepad_states()
 		}
 		previous_pressed[i] = currently_pressed;
 
-		// Sticks/triggers: raw analog values for both
-		if (i < 6)
+		// Sticks: raw analog values for both raw and toggle arrays
+		if (i < 4)
 		{
 			latest_raw[i] = raw[i];
 			latest_toggle[i] = raw[i];
 		}
 		else
 		{
-			// Buttons: raw is direct press state, toggle is toggled bool
+			// Triggers and buttons: raw is direct analog/press state, toggle is latched bool
 			latest_raw[i] = raw[i];
 			latest_toggle[i] = toggle_states[i] ? 1.0f : 0.0f;
 		}
@@ -124,7 +124,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
 }
 
 extern "C" __declspec(dllexport) const char *NAME = "Xinp";
-extern "C" __declspec(dllexport) const char *DESCRIPTION = "This Ximput Gamepad Addon passes both raw and toggle gamepad states to shaders.";
+extern "C" __declspec(dllexport) const char *DESCRIPTION = "This Xinput Gamepad Addon passes both raw and toggle gamepad states to shaders.";
 
 /*
 Usage in shader:
