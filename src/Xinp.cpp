@@ -7,9 +7,9 @@
 #include <Xinput.h>
 #include <reshade.hpp>
 #include <cstring>
-//Xinput is only available on Windows, so we can use the Windows API directly
+#include <cmath>
 #pragma comment(lib, "Xinput.lib")
-// Order: LX, LY, RX, RY, LT, RT, A, B, X, Y, Start, Back, DPadU, DPadD, DPadL, DPadR, LThumb, RThumb, LShoulder, RShoulder
+ // Order: LX, LY, RX, RY, LT, RT, A, B, X, Y, Start, Back, DPadU, DPadD, DPadL, DPadR, LThumb, RThumb, LShoulder, RShoulder
 #define OUT_COUNT 20
 // Number of outputs we want to provide to shaders
 static bool toggle_states[OUT_COUNT] = {};
@@ -18,6 +18,33 @@ static bool previous_pressed[OUT_COUNT] = {};
 // Store latest states so both arrays can be set for toggle and raw values
 static float latest_toggle[OUT_COUNT] = {};
 static float latest_raw[OUT_COUNT] = {};
+
+// Default Microsoft Xbox deadzone
+static constexpr float DEFAULT_DEADZONE = 7849.0f;
+static float DEADZONE_ADJUST = 1.0f; // Slider default (100% at default deadzone)
+
+// Kingeric1992 told me to add this function to apply deadzone to the sticks.
+// https://learn.microsoft.com/en-us/windows/win32/xinput/getting-started-with-xinput
+static void apply_stick_deadzone(float LX, float LY, float deadzone, float max, float &outX, float &outY)
+{
+	float magnitude = sqrt(LX * LX + LY * LY);
+	if (magnitude > deadzone)
+	{
+		if (magnitude > max) magnitude = max;
+
+		magnitude -= deadzone;
+		float normalizedMagnitude = magnitude / (max - deadzone);
+
+		float vectorLength = sqrt(LX * LX + LY * LY);
+		outX = (LX / vectorLength) * normalizedMagnitude;
+		outY = (LY / vectorLength) * normalizedMagnitude;
+	}
+	else
+	{
+		outX = 0.0f;
+		outY = 0.0f;
+	}
+}
 
 static void get_gamepad_state(float out[OUT_COUNT])
 {
@@ -28,11 +55,24 @@ static void get_gamepad_state(float out[OUT_COUNT])
 	if (XInputGetState(0, &state) != ERROR_SUCCESS)
 		return; // No controller connected
 
-	// Joysticks - No toggle states for analog sticks, just raw values
-	out[0] = state.Gamepad.sThumbLX / 32767.0f;
-	out[1] = state.Gamepad.sThumbLY / 32767.0f;
-	out[2] = state.Gamepad.sThumbRX / 32767.0f;
-	out[3] = state.Gamepad.sThumbRY / 32767.0f;
+	// Microsoft default for Xbox controller
+	constexpr float MAX_STICK = 32767.0f;
+	float scaled_deadzone = DEADZONE_ADJUST * DEFAULT_DEADZONE;
+
+	// Apply deadzone Left
+	apply_stick_deadzone(
+		static_cast<float>(state.Gamepad.sThumbLX),
+		static_cast<float>(state.Gamepad.sThumbLY),
+		scaled_deadzone, MAX_STICK,
+		out[0], out[1]
+	);
+	// Apply deadzone Right
+	apply_stick_deadzone(
+		static_cast<float>(state.Gamepad.sThumbRX),
+		static_cast<float>(state.Gamepad.sThumbRY),
+		scaled_deadzone, MAX_STICK,
+		out[2], out[3]
+	);
 
 	// Triggers
 	out[4] = state.Gamepad.bLeftTrigger / 255.0f;
@@ -86,24 +126,49 @@ static void update_gamepad_states()
 	}
 }
 
+// Attempt to read DEADZONE_ADJUST from shader added this because to make it easier to adjust deadzone for the users.
+// https://reshade.me/forum/addons-discussion/9962-how-to-expose-addon-data-as-global-uniforms-for-all-shaders
+static void read_deadzone_from_shader(reshade::api::effect_runtime *runtime)
+{
+	// Default first
+	DEADZONE_ADJUST = 1.0f;
+
+	// Enumerrate all uniforms and find DEADZONE_ADJUST by name
+	runtime->enumerate_uniform_variables(nullptr, [](reshade::api::effect_runtime *rt, reshade::api::effect_uniform_variable var, void *user_data)
+	{
+		float *deadzone_ptr = reinterpret_cast<float *>(user_data);
+
+		char name[128] = {};
+		rt->get_uniform_variable_name(var, name);
+
+		if (std::strcmp(name, "DEADZONE_ADJUST") == 0)
+		{
+			// Read the current shader value
+			float value = *deadzone_ptr; // default if reading flails
+			rt->get_uniform_value_float(var, &value, 1);
+			*deadzone_ptr = value;
+		}
+	}, &DEADZONE_ADJUST);
+}
+
 static void on_begin_effects(reshade::api::effect_runtime *runtime, reshade::api::command_list *, reshade::api::resource_view, reshade::api::resource_view)
 {
+	// Read DEADZONE_ADJUST from shader (or use default if not present)
+	read_deadzone_from_shader(runtime);
+
+	// Update gamepad states using the slider value
 	update_gamepad_states();
 
+	// Write raw/toggle values back to shader as usual
 	runtime->enumerate_uniform_variables(nullptr, [](reshade::api::effect_runtime *rt, reshade::api::effect_uniform_variable var)
 	{
-		char source[32] = {};
-		if (rt->get_annotation_string_from_uniform_variable(var, "source", source))
-		{
-			if (strcmp(source, "gamepad_toggle") == 0)
-			{
-				rt->set_uniform_value_float(var, latest_toggle, OUT_COUNT);
-			}
-			else if (strcmp(source, "gamepad_raw") == 0)
-			{
-				rt->set_uniform_value_float(var, latest_raw, OUT_COUNT);
-			}
-		}
+		char name[128] = {};
+		rt->get_uniform_variable_name(var, name);
+
+		if (std::strcmp(name, "gamepad_toggle") == 0)
+			rt->set_uniform_value_float(var, latest_toggle, OUT_COUNT);
+		else if (std::strcmp(name, "gamepad_raw") == 0)
+			rt->set_uniform_value_float(var, latest_raw, OUT_COUNT);
 	});
 }
 
@@ -126,7 +191,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
 extern "C" __declspec(dllexport) const char *NAME = "Xinp Gamepad";
 extern "C" __declspec(dllexport) const char *DESCRIPTION = "This Xinput Gamepad Addon passes both raw and toggle gamepad states to shaders.";
 //extern "C" __declspec(dllexport) const char *AUTHOR = "Depth3D - Jose Negrete";
-//extern "C" __declspec(dllexport) const char *VERSION = "1.0.2";
+//extern "C" __declspec(dllexport) const char *VERSION = "1.0.3";
 
 /*
 Usage in shader:
@@ -146,4 +211,12 @@ if (gamepad_raw[6] > 0.5)
 {
 	// A button is held down
 }
+
+uniform float DEADZONE_ADJUST <
+	ui_type = "slider"; ui_min = 0.0; ui_max = 2.0;
+	ui_label = " DeadZone Size";
+	ui_tooltip = "DeadZone Scale 0 is no deadzone and 2 is 2X the deadzone.\n"
+				 "1 is default microsoft recommended settings.";
+	ui_category = "Pad Stuff";
+> = 1.0;
 */

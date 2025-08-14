@@ -11,6 +11,14 @@
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #include "2DSDFunctions.fxh"
 
+uniform float DEADZONE_ADJUST <
+    ui_type = "slider"; ui_min = 0.0; ui_max = 2.0;
+	ui_label = " DeadZone Size";
+	ui_tooltip = "DeadZone Scale 0 is no deadzone and 2 is 2X the deadzone.\n"
+			     "1 is default microsoft recommended settings.";
+	ui_category = "Pad Stuff";
+> = 1.0;
+
 uniform float Pad_Size <
     ui_type = "slider"; ui_min = 0.0; ui_max = 1.0;
 	ui_label = " Pad Size";
@@ -566,7 +574,8 @@ void Wake_PS(float4 position : SV_Position, float2 texcoord : TEXCOORD, out floa
 
 void Body_PS(float4 position : SV_Position, float2 texcoord : TEXCOORD, out float4 color : SV_Target0)
 {
-    color = float4(DrawButtons(texcoord, rez).rgb,DrawBody(texcoord, rez).x);
+	//DrawButtons(texcoord, rez).rgb
+    color = float4(0,0,0,DrawBody(texcoord, rez).x);
 }
 ///////////////////////////////////////////////////////////ReShade.fxh/////////////////////////////////////////////////////////////
 // Vertex shader generating a triangle covering the entire screen
