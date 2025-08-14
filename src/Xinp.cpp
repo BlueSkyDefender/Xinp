@@ -123,8 +123,10 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
 	return TRUE;
 }
 
-extern "C" __declspec(dllexport) const char *NAME = "Xinp";
+extern "C" __declspec(dllexport) const char *NAME = "Xinp Gamepad";
 extern "C" __declspec(dllexport) const char *DESCRIPTION = "This Xinput Gamepad Addon passes both raw and toggle gamepad states to shaders.";
+//extern "C" __declspec(dllexport) const char *AUTHOR = "Depth3D - Jose Negrete";
+//extern "C" __declspec(dllexport) const char *VERSION = "1.0.2";
 
 /*
 Usage in shader:
