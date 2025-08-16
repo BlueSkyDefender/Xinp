@@ -77,9 +77,11 @@ ui_type = "color";
     ui_label = "Dot Color";
 	ui_category = "Joy Stuff";
 > = float4(0.0, 0.0, 1.0, 1.0);
+//Controller Usage in Shader
+//uniform float gamepad_toggle[20] < source = "gamepad_toggle"; >;
+//uniform float gamepad_toggle_raw[20]    < source = "gamepad_raw";    >;
+uniform float2 gamepad_toggle_raw[20]    < source = "gamepad_toggle_raw";>;//was added because of DX9
 
-uniform float gamepad_toggle[20] < source = "gamepad_toggle"; >;
-uniform float gamepad_raw[20]    < source = "gamepad_raw";    >;
 uniform int Frames < source = "framecount";>;
 uniform float timer < source = "timer"; >;
 /////////////////////////////////////////////D3D Starts Here/////////////////////////////////////////////////////////////////
@@ -222,12 +224,12 @@ float4 DrawButtons(float2 tc, float2 resolution)
     float4 colorY = float4(1.0, 1.0, 0.0, 1.0);
     float4 colorST = float4(0.25, 0.25, 0.25, 1.0);
     float4 colorSE = float4(0.25, 0.25, 0.25, 1.0);
-	colorA.rgb = lerp(colorA.rgb,1,gamepad_raw[6]);
-	colorB.rgb = lerp(colorB.rgb,1,gamepad_raw[7]);
-	colorX.rgb = lerp(colorX.rgb,1,gamepad_raw[8]);
-	colorY.rgb = lerp(colorY.rgb,1,gamepad_raw[9]);
-	colorST.rgb = lerp(colorST.rgb,1,gamepad_raw[11]);
-	colorSE.rgb = lerp(colorSE.rgb,1,gamepad_raw[10]);	
+	colorA.rgb = lerp(colorA.rgb,1,gamepad_toggle_raw[6].y);
+	colorB.rgb = lerp(colorB.rgb,1,gamepad_toggle_raw[7].y);
+	colorX.rgb = lerp(colorX.rgb,1,gamepad_toggle_raw[8].y);
+	colorY.rgb = lerp(colorY.rgb,1,gamepad_toggle_raw[9].y);
+	colorST.rgb = lerp(colorST.rgb,1,gamepad_toggle_raw[11].y);
+	colorSE.rgb = lerp(colorSE.rgb,1,gamepad_toggle_raw[10].y);	
     float4 bgColor = float4(0, 0, 0, 1);
     float4 col = bgColor;
     col = lerp(col, colorA, aAlpha);
@@ -243,12 +245,12 @@ float4 DrawButtons(float2 tc, float2 resolution)
 float4 JoyLeftRight(float2 tc, float2 resolution, bool Switch)
 {
     //Joystick input
-    float LRJoyX = -gamepad_raw[0] * 0.025;
-    float LRJoyY = gamepad_raw[1] * 0.04;
+    float LRJoyX = -gamepad_toggle_raw[0].y * 0.025;
+    float LRJoyY = gamepad_toggle_raw[1].y * 0.04;
 	if(Switch)
 	{
-    	LRJoyX = -gamepad_raw[2] * 0.025;
-    	LRJoyY = gamepad_raw[3] * 0.04;	
+    	LRJoyX = -gamepad_toggle_raw[2].y * 0.025;
+    	LRJoyY = gamepad_toggle_raw[3].y * 0.04;	
     }
     //Aspect ratio
     float aspect = resolution.x / resolution.y;
@@ -316,10 +318,10 @@ float4 JoyLeftRight(float2 tc, float2 resolution, bool Switch)
     float4 colorA = float4(0.1, 0.1, 0.1, 1.0);
     float4 colorB = float4(0.05, 0.05, 0.05, 1.0);
     
-    if(!Switch && gamepad_raw[16])
+    if(!Switch && gamepad_toggle_raw[16].y)
     	colorB.rgb = 1;
     	
-    if(Switch && gamepad_raw[17])
+    if(Switch && gamepad_toggle_raw[17].y)
     	colorB.rgb = 1;    
     	
     float4 col = float4(0, 0, 0, 1);
@@ -348,13 +350,13 @@ float4 DrawDPad(float2 uv, float2 resolution)
 	float cBar = max(hBar, vBar);
 	
 	float3 Color = float3(0.1875,0.1875,0.1875);
-	if(p.x > -0.156 && gamepad_raw[15])
+	if(p.x > -0.156 && gamepad_toggle_raw[15].y)
 		Color = 1;
-	if(p.x < -0.194 && gamepad_raw[14])
+	if(p.x < -0.194 && gamepad_toggle_raw[14].y)
 		Color = 1;	
-	if(p.y > 0.119 && gamepad_raw[13])
+	if(p.y > 0.119 && gamepad_toggle_raw[13].y)
 		Color = 1;
-	if(p.y < 0.081 && gamepad_raw[12])
+	if(p.y < 0.081 && gamepad_toggle_raw[12].y)
 		Color = 1;	 
 		
 	return float4(Color,cBar);
@@ -383,9 +385,9 @@ float4 DrawLeftRightButton(float2 tc, float2 resolution)
     float Beta = smoothstep(thickness, -thickness, body1);
     float Sten = Alpha + Beta;
     float3 Color = float3(0.125,0.125,0.125) * Sten;
-    if(gamepad_raw[18] && Beta)
+    if(gamepad_toggle_raw[18].y && Beta)
     	Color = float3(1.0,1.0,1.0) * Sten;
-    if(gamepad_raw[19] && Alpha)
+    if(gamepad_toggle_raw[19].y && Alpha)
     	Color = float3(1.0,1.0,1.0) * Sten;    
     return float4(Color,Sten);
 }
@@ -413,10 +415,10 @@ float4 DrawLeftRightTriggers(float2 tc, float2 resolution)
     float Beta = smoothstep(thickness, -thickness, body1);
     float Sten = Alpha + Beta;
     float3 Color = float3(0.125,0.125,0.125) * Sten;
-    if(Beta)//gamepad_raw[4]
-    	Color = p.y < -lerp(0.123,0.3,gamepad_raw[4]) ? Color : float3(1.0,1.0,1.0);
-    if(Alpha)//gamepad_raw[5]
-    	Color = p.y < -lerp(0.123,0.3,gamepad_raw[5]) ? Color : float3(1.0,1.0,1.0);    
+    if(Beta)//gamepad_toggle_raw[4]
+    	Color = p.y < -lerp(0.123,0.3,gamepad_toggle_raw[4].y) ? Color : float3(1.0,1.0,1.0);
+    if(Alpha)//gamepad_toggle_raw[5]
+    	Color = p.y < -lerp(0.123,0.3,gamepad_toggle_raw[5].y) ? Color : float3(1.0,1.0,1.0);    
     return float4(Color*Sten,Sten);
 }
 
@@ -513,8 +515,8 @@ void Past_Controller_Debug_PS(float4 position : SV_Position, float2 texcoord : T
 	float2 currentPos_B = Info.zw;
 	
     // Joystick movement (invert Y so up is up)
-    float2 stick_A = float2(gamepad_raw[0], -gamepad_raw[1]);
-    float2 stick_B = float2(gamepad_raw[2], -gamepad_raw[3]);
+    float2 stick_A = float2(gamepad_toggle_raw[0].y, -gamepad_toggle_raw[1].y);
+    float2 stick_B = float2(gamepad_toggle_raw[2].y, -gamepad_toggle_raw[3].y);
     
     // Sensitivity controls speed (in UV units per frame)
     currentPos_A += stick_A * (Sensitivity * 0.01); // tweak 0.01 to control speed
@@ -551,8 +553,8 @@ void Current_Controller_Debug_PS(float4 position : SV_Position, float2 texcoord 
 	}
 	
     // Joystick movement (invert Y so up is up)
-    float2 stick_A = float2(gamepad_raw[0], -gamepad_raw[1]);
-    float2 stick_B = float2(gamepad_raw[2], -gamepad_raw[3]);
+    float2 stick_A = float2(gamepad_toggle_raw[0].y, -gamepad_toggle_raw[1].y);
+    float2 stick_B = float2(gamepad_toggle_raw[2].y, -gamepad_toggle_raw[3].y);
     
     // Sensitivity controls speed (in UV units per frame)
     prevPos_A += stick_A * (Sensitivity * 0.01); // tweak 0.01 to control speed
@@ -632,7 +634,7 @@ void PostProcessVS(in uint id : SV_VertexID, out float4 position : SV_Position, 
     float4 bg = tex2D(BackBuffer, texcoord);
 
     // Left stick: X = [0], Y = [1]
-    float2 stick = float2(gamepad_raw[0], -gamepad_raw[1]); // invert Y so up is up
+    float2 stick = float2(gamepad_toggle_raw[0].y, -gamepad_toggle_raw[1].y); // invert Y so up is up
     float2 stickUV = stick * 0.5 + 0.5;                     // [-1,1] -> [0,1]
 
     // Center controller movements

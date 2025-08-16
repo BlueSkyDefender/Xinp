@@ -8,6 +8,8 @@
 The **Xinp** add-on passes both **raw** and **toggle** XInput gamepad states directly to ReShade shaders.  
 This enables shaders to react to gamepad input without requiring custom input logic in the shader.
 
+With the latest update, you can now access both raw and toggle states in a single `float2` array.
+
 ---
 
 ## Features
@@ -21,17 +23,34 @@ This enables shaders to react to gamepad input without requiring custom input lo
   - Remains ON until pressed again.
   - Analog values are passed through unchanged.
 
+- **Combined Mode** – Both toggle and raw in a single `float2`:
+  - `.x` → toggle state  
+  - `.y` → raw state
+
 ---
 
 ## Shader Integration
 
 ### Uniform Declarations
+
 ```hlsl
+// Combined toggle + raw mode (recommended for DX9)
+uniform float2 gamepad_toggle_raw[20] < source = "gamepad_toggle_raw"; >;
+
 // Toggle mode (persistent ON/OFF for buttons)
 uniform float gamepad_toggle[20] < source = "gamepad_toggle"; >;
 
 // Raw mode (real-time state)
 uniform float gamepad_raw[20] < source = "gamepad_raw"; >;
+
+// Deadzone adjustment slider
+uniform float DEADZONE_ADJUST <
+	ui_type = "slider"; ui_min = 0.0; ui_max = 2.0;
+	ui_label = " DeadZone Size";
+	ui_tooltip = "DeadZone Scale 0 is no deadzone and 2 is 2X the deadzone.\n"
+				 "1 is default Microsoft recommended settings.";
+	ui_category = "Pad Stuff";
+> = 1.0;
 ````
 
 ---
@@ -68,7 +87,7 @@ uniform float gamepad_raw[20] < source = "gamepad_raw"; >;
 **Toggle A Button ON/OFF**
 
 ```hlsl
-if (gamepad_toggle[6] > 0.5)
+if (gamepad_toggle_raw[6].x > 0.5)
 {
     // A button toggle is ON
 }
@@ -77,7 +96,7 @@ if (gamepad_toggle[6] > 0.5)
 **Check if A Button is Held Down**
 
 ```hlsl
-if (gamepad_raw[6] > 0.5)
+if (gamepad_toggle_raw[6].y > 0.5)
 {
     // A button is currently pressed
 }
@@ -86,7 +105,7 @@ if (gamepad_raw[6] > 0.5)
 **Use Left Stick for Movement**
 
 ```hlsl
-float2 movement = float2(gamepad_raw[0], gamepad_raw[1]);
+float2 movement = float2(gamepad_toggle_raw[0].y, gamepad_toggle_raw[1].y);
 // movement.x = horizontal (-1.0 left, 1.0 right)
 // movement.y = vertical (-1.0 down, 1.0 up)
 ```
@@ -94,7 +113,7 @@ float2 movement = float2(gamepad_raw[0], gamepad_raw[1]);
 **Trigger-based Effect Strength**
 
 ```hlsl
-float effect_strength = gamepad_raw[5]; // RT trigger
+float effect_strength = gamepad_toggle_raw[5].y; // RT trigger
 // Range: 0.0 (released) to 1.0 (fully pressed)
 ```
 
@@ -105,4 +124,5 @@ float effect_strength = gamepad_raw[5]; // RT trigger
 * Requires an **XInput-compatible controller** (Xbox 360, Xbox One, Xbox Series X|S, or equivalent).
 * Only the **first connected controller** (index 0) is polled.
 * Windows only.
+* `gamepad_toggle_raw` is recommended for new shaders, but `gamepad_toggle` and `gamepad_raw` still work for backward compatibility.
 

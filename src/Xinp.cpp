@@ -164,11 +164,22 @@ static void on_begin_effects(reshade::api::effect_runtime *runtime, reshade::api
 	{
 		char name[128] = {};
 		rt->get_uniform_variable_name(var, name);
-
+		// Keeping this so that shader that use the older method sitllworks.
 		if (std::strcmp(name, "gamepad_toggle") == 0)
 			rt->set_uniform_value_float(var, latest_toggle, OUT_COUNT);
 		else if (std::strcmp(name, "gamepad_raw") == 0)
 			rt->set_uniform_value_float(var, latest_raw, OUT_COUNT);
+		else if (std::strcmp(name, "gamepad_toggle_raw") == 0)//This is for compatibility with DX9 that complain about using too many tempregisters.
+		{
+			// Pack toggle/raw into float2 array
+			float combined[OUT_COUNT * 2] = {};
+			for (int i = 0; i < OUT_COUNT; ++i)
+			{
+				combined[i * 2 + 0] = latest_toggle[i]; // x = toggle
+				combined[i * 2 + 1] = latest_raw[i];    // y = raw
+			}
+			rt->set_uniform_value_float(var, combined, OUT_COUNT * 2);
+		}
 	});
 }
 
