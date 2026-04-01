@@ -6,8 +6,7 @@
 The **Xinp** add-on passes both **raw** and **toggle** XInput gamepad states directly to ReShade shaders.  
 This enables shaders to react to gamepad input without requiring custom input logic in the shader.
 With the latest update, you can now access both raw and toggle states in a single `float2` array.
-Additionally, the **Guide/Xbox button** is now supported via undocumented `XInputGetStateEx` (ordinal 100), and four **combo hold toggles** (Back + LT/LB/RT/RB, hold 1 second) are available at indices 21–24.
-Users may need to disable the Windows Game Bar for reliable Guide button detection.
+The **Guide/Xbox button** is now supported, along with four **combo hold toggles** (Back + LT/LB/RT/RB) that toggle on/off when held for 1 second.
 ---
 ## Features
 - **Raw Mode** – Real-time gamepad input values:
@@ -42,33 +41,33 @@ uniform float DEADZONE_ADJUST <
 ```
 ---
 ## Index Mapping
-| Index | Control            | Type        | Range       |
-| ----- | ------------------ | ----------- | ----------- |
-| 0     | LX                 | Analog      | -1.0 → 1.0 |
-| 1     | LY                 | Analog      | -1.0 → 1.0 |
-| 2     | RX                 | Analog      | -1.0 → 1.0 |
-| 3     | RY                 | Analog      | -1.0 → 1.0 |
-| 4     | LT                 | Analog      | 0.0 → 1.0  |
-| 5     | RT                 | Analog      | 0.0 → 1.0  |
-| 6     | A                  | Button      | 0.0 / 1.0  |
-| 7     | B                  | Button      | 0.0 / 1.0  |
-| 8     | X                  | Button      | 0.0 / 1.0  |
-| 9     | Y                  | Button      | 0.0 / 1.0  |
-| 10    | Start              | Button      | 0.0 / 1.0  |
-| 11    | Back               | Button      | 0.0 / 1.0  |
-| 12    | DPad Up            | Button      | 0.0 / 1.0  |
-| 13    | DPad Down          | Button      | 0.0 / 1.0  |
-| 14    | DPad Left          | Button      | 0.0 / 1.0  |
-| 15    | DPad Right         | Button      | 0.0 / 1.0  |
-| 16    | Left Thumb         | Button      | 0.0 / 1.0  |
-| 17    | Right Thumb        | Button      | 0.0 / 1.0  |
-| 18    | Left Shoulder      | Button      | 0.0 / 1.0  |
-| 19    | Right Shoulder     | Button      | 0.0 / 1.0  |
-| 20    | Guide              | Button      | 0.0 / 1.0  |
-| 21    | Back + LT          | Combo Hold  | 0.0 / 1.0  |
-| 22    | Back + Left Bump   | Combo Hold  | 0.0 / 1.0  |
-| 23    | Back + RT          | Combo Hold  | 0.0 / 1.0  |
-| 24    | Back + Right Bump  | Combo Hold  | 0.0 / 1.0  |
+| Index | Control            | Type       | Range       |
+| ----- | ------------------ | ---------- | ----------- |
+| 0     | LX                 | Analog     | -1.0 → 1.0 |
+| 1     | LY                 | Analog     | -1.0 → 1.0 |
+| 2     | RX                 | Analog     | -1.0 → 1.0 |
+| 3     | RY                 | Analog     | -1.0 → 1.0 |
+| 4     | LT                 | Analog     | 0.0 → 1.0  |
+| 5     | RT                 | Analog     | 0.0 → 1.0  |
+| 6     | A                  | Button     | 0.0 / 1.0  |
+| 7     | B                  | Button     | 0.0 / 1.0  |
+| 8     | X                  | Button     | 0.0 / 1.0  |
+| 9     | Y                  | Button     | 0.0 / 1.0  |
+| 10    | Start              | Button     | 0.0 / 1.0  |
+| 11    | Back               | Button     | 0.0 / 1.0  |
+| 12    | DPad Up            | Button     | 0.0 / 1.0  |
+| 13    | DPad Down          | Button     | 0.0 / 1.0  |
+| 14    | DPad Left          | Button     | 0.0 / 1.0  |
+| 15    | DPad Right         | Button     | 0.0 / 1.0  |
+| 16    | Left Thumb         | Button     | 0.0 / 1.0  |
+| 17    | Right Thumb        | Button     | 0.0 / 1.0  |
+| 18    | Left Shoulder      | Button     | 0.0 / 1.0  |
+| 19    | Right Shoulder     | Button     | 0.0 / 1.0  |
+| 20    | Guide              | Button     | 0.0 / 1.0  |
+| 21    | Back + LT          | Combo Hold | 0.0 / 1.0  |
+| 22    | Back + Left Bump   | Combo Hold | 0.0 / 1.0  |
+| 23    | Back + RT          | Combo Hold | 0.0 / 1.0  |
+| 24    | Back + Right Bump  | Combo Hold | 0.0 / 1.0  |
 ---
 ## Examples
 **Toggle A Button ON/OFF**
@@ -101,6 +100,6 @@ float effect_strength = gamepad_toggle_raw[5].y; // RT trigger
 * Requires an **XInput-compatible controller** (Xbox 360, Xbox One, Xbox Series X|S, or equivalent).
 * Only the **first connected controller** (index 0) is polled.
 * Windows only.
-* **Combo hold toggles** require both buttons held for **1 second**. Release both before holding again to toggle back.
+* The **Guide button** uses undocumented `XInputGetStateEx`. Disable the Windows Game Bar for reliable detection.
+* **Combo hold toggles** require both buttons held for **1 second**. Release both before holding again to re-toggle.
 * `gamepad_toggle_raw` is recommended for new shaders, but `gamepad_toggle` and `gamepad_raw` still work for backward compatibility.
-
