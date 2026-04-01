@@ -9,9 +9,38 @@
 #include <cstring>
 #include <cmath>
 #pragma comment(lib, "Xinput.lib")
- // Order: LX, LY, RX, RY, LT, RT, A, B, X, Y, Start, Back, DPadU, DPadD, DPadL, DPadR, LThumb, RThumb, LShoulder, RShoulder
-#define OUT_COUNT 20
+ // Order: LX, LY, RX, RY, LT, RT, A, B, X, Y, Start, Back, DPadU, DPadD, DPadL, DPadR, LThumb, RThumb, LShoulder, RShoulder, Guide, Combo_Back+LT, Combo_Back+LB, Combo_Back+RT, Combo_Back+RB
+#define OUT_COUNT 25
 // Number of outputs we want to provide to shaders
+
+// Guide button is not part of the public XInput API
+#define XINPUT_GAMEPAD_GUIDE 0x0400
+
+// Combo toggle hold duration in seconds
+static constexpr double COMBO_HOLD_DURATION = 1.0;
+
+// Combo toggle definitions (pairs of raw[] indices)
+#define COMBO_COUNT 4
+struct ComboToggle
+{
+	int index_a;       // First button raw[] index
+	int index_b;       // Second button raw[] index
+	bool toggle_state; // Current latched toggle
+	bool is_held;      // Combo is currently being held
+	bool has_toggled;  // Already toggled during this hold (prevent re-fire)
+	LARGE_INTEGER hold_start; // QPC timestamp when hold began
+};
+
+// Back(11) + LT(4), Back(11) + LShoulder(18), Back(11) + RT(5), Back(11) + RShoulder(19)
+static ComboToggle combos[COMBO_COUNT] = {
+	{ 11, 4,  false, false, false, {} },
+	{ 11, 18, false, false, false, {} },
+	{ 11, 5,  false, false, false, {} },
+	{ 11, 19, false, false, false, {} },
+};
+
+static LARGE_INTEGER qpc_frequency = {};
+
 static bool toggle_states[OUT_COUNT] = {};
 static bool previous_pressed[OUT_COUNT] = {};
 
@@ -22,6 +51,10 @@ static float latest_raw[OUT_COUNT] = {};
 // Default Microsoft Xbox deadzone
 static constexpr float DEFAULT_DEADZONE = 7849.0f;
 static float DEADZONE_ADJUST = 1.0f; // Slider default (100% at default deadzone)
+
+// Undocumented XInputGetStateEx (ordinal 100) — includes Guide button
+typedef DWORD(WINAPI *XInputGetStateEx_t)(DWORD dwUserIndex, XINPUT_STATE *pState);
+static XInputGetStateEx_t XInputGetStateEx_fn = nullptr;
 
 // Kingeric1992 told me to add this function to apply deadzone to the sticks.
 // https://learn.microsoft.com/en-us/windows/win32/xinput/getting-started-with-xinput
@@ -52,7 +85,15 @@ static void get_gamepad_state(float out[OUT_COUNT])
 		out[i] = 0.0f;
 
 	XINPUT_STATE state = {};
-	if (XInputGetState(0, &state) != ERROR_SUCCESS)
+
+	// Try undocumented XInputGetStateEx first for Guide button support, fall back to XInputGetState
+	DWORD result;
+	if (XInputGetStateEx_fn)
+		result = XInputGetStateEx_fn(0, &state);
+	else
+		result = XInputGetState(0, &state);
+
+	if (result != ERROR_SUCCESS)
 		return; // No controller connected
 
 	// Microsoft default for Xbox controller
@@ -94,6 +135,48 @@ static void get_gamepad_state(float out[OUT_COUNT])
 	out[17] = (b & XINPUT_GAMEPAD_RIGHT_THUMB) ? 1.0f : 0.0f;
 	out[18] = (b & XINPUT_GAMEPAD_LEFT_SHOULDER) ? 1.0f : 0.0f;
 	out[19] = (b & XINPUT_GAMEPAD_RIGHT_SHOULDER) ? 1.0f : 0.0f;
+	out[20] = (b & XINPUT_GAMEPAD_GUIDE) ? 1.0f : 0.0f;
+	// Indices 21-24 are combo toggles, handled separately in update_combo_toggles()
+}
+
+static void update_combo_toggles(const float raw[OUT_COUNT])
+{
+	LARGE_INTEGER now;
+	QueryPerformanceCounter(&now);
+
+	for (int i = 0; i < COMBO_COUNT; ++i)
+	{
+		ComboToggle &combo = combos[i];
+		// Both buttons must be pressed (using same 0.1 threshold as single toggles)
+		bool both_pressed = (raw[combo.index_a] > 0.1f) && (raw[combo.index_b] > 0.1f);
+
+		if (both_pressed)
+		{
+			if (!combo.is_held)
+			{
+				// Combo just started being held
+				combo.is_held = true;
+				combo.has_toggled = false;
+				combo.hold_start = now;
+			}
+			else if (!combo.has_toggled)
+			{
+				// Check if held long enough
+				double elapsed = static_cast<double>(now.QuadPart - combo.hold_start.QuadPart) / static_cast<double>(qpc_frequency.QuadPart);
+				if (elapsed >= COMBO_HOLD_DURATION)
+				{
+					combo.toggle_state = !combo.toggle_state;
+					combo.has_toggled = true; // Don't toggle again until released and re-held
+				}
+			}
+		}
+		else
+		{
+			// Released — reset hold tracking
+			combo.is_held = false;
+			combo.has_toggled = false;
+		}
+	}
 }
 
 static void update_gamepad_states()
@@ -101,8 +184,20 @@ static void update_gamepad_states()
 	float raw[OUT_COUNT] = {};
 	get_gamepad_state(raw);
 
+	// Process combo toggles before writing outputs
+	update_combo_toggles(raw);
+
 	for (int i = 0; i < OUT_COUNT; ++i)
-	{   // Treat triggers (indices 4 and 5) and all buttons (index >= 6) as toggle candidates
+	{
+		// Combo toggle outputs (21-24) are toggle-only, no raw equivalent
+		if (i >= 21)
+		{
+			latest_raw[i] = combos[i - 21].toggle_state ? 1.0f : 0.0f;
+			latest_toggle[i] = latest_raw[i];
+			continue;
+		}
+
+		// Treat triggers (indices 4 and 5) and all buttons (index >= 6) as toggle candidates
 		bool currently_pressed = (i >= 4 && raw[i] > 0.1f);// Threshold to consider a button pressed and Triggers pressed at 10% May need to make this adjustable.
 
 		if (currently_pressed && !previous_pressed[i])
@@ -189,6 +284,17 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
 	{
 		if (!reshade::register_addon(hModule))
 			return FALSE;
+
+		// Cache QPC frequency for combo hold timing
+		QueryPerformanceFrequency(&qpc_frequency);
+
+		// Try to load XInputGetStateEx (ordinal 100) for Guide button support
+		HMODULE xinput = LoadLibraryA("xinput1_4.dll");
+		if (!xinput)
+			xinput = LoadLibraryA("xinput1_3.dll");
+		if (xinput)
+			XInputGetStateEx_fn = reinterpret_cast<XInputGetStateEx_t>(GetProcAddress(xinput, MAKEINTRESOURCEA(100)));
+
 		reshade::register_event<reshade::addon_event::reshade_begin_effects>(on_begin_effects);
 	}
 	else if (reason == DLL_PROCESS_DETACH)
@@ -201,8 +307,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD reason, LPVOID)
 
 extern "C" __declspec(dllexport) const char *NAME = "Xinp Gamepad";
 extern "C" __declspec(dllexport) const char *DESCRIPTION = "This Xinput Gamepad Addon passes both raw and toggle gamepad states to shaders.";
-//extern "C" __declspec(dllexport) const char *AUTHOR = "Depth3D - Jose Negrete";
-//extern "C" __declspec(dllexport) const char *VERSION = "1.0.3";
+extern "C" __declspec(dllexport) const char *AUTHOR = "Depth3D - Jose Negrete";
+extern "C" __declspec(dllexport) const char *VERSION = "1.0.5";
 
 /*
 Usage in shader:
