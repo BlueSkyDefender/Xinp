@@ -1,4 +1,3 @@
-````markdown
 # Xinp Gamepad Add-on for ReShade
 **Author:** Jose Negrete (BlueSkyDefender)  
 **License:** BSD-3-Clause  
